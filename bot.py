@@ -7,10 +7,10 @@ import pytz
 
 
 TIMEZONE = pytz.timezone('Europe/Moscow')
-
+TOKEN = 'urtoken'
 
 async def send_msg(chat_id, message):
-    bot = Bot(token='7340463442:AAHTj9njBjsXHnLmL-Wbrek575z9e840Sxc')
+    bot = Bot(token=TOKEN)
     await bot.send_message(chat_id=chat_id, text=message)
 
 
@@ -121,7 +121,7 @@ async def common(update, context: ContextTypes.DEFAULT_TYPE):
 
 
 if __name__ == '__main__':
-    app = Application.builder().token('7340463442:AAHTj9njBjsXHnLmL-Wbrek575z9e840Sxc').build()
+    app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler('start', start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, common))
     app.run_polling()
