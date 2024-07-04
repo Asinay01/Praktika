@@ -9,6 +9,9 @@ def create_form():
     # Create the main window
     root = tk.Tk()
     root.title("Medical Form")
+
+    root.minsize(600, 400)
+
     medications = []
 
     def clean_lines():
@@ -77,37 +80,54 @@ def create_form():
         search_name = entry_name.get()
         table_window = tk.Toplevel(root)
         table_window.title(f"Таблица для записи с ФИО '{search_name}'")
-        tree = ttk.Treeview(table_window, columns=('Лекарство', 'Кол-во', "Сколько дней"), show='headings')
+        table_window.minsize(800, 400)
+        tree = ttk.Treeview(table_window, columns=('Лекарство', 'Кол-во', "Сколько дней", "Дата", "Содержание"), show='headings')
+        
+        table_window.minsize(1900, 400)
+
         tree.heading('Лекарство', text='Лекарство')
         tree.heading('Кол-во', text='Кол-во')
         tree.heading('Сколько дней', text='Сколько дней')
-        tree.pack()
-        with open('data.yaml', 'r', encoding='utf-8') as file:
-            data = yaml.safe_load(file)
-            found = False
-            if data:
-                medication_row[0]+=1
-                for fio, info in data.items():
-                    if fio == search_name:
-                        for med in info['Лекарства']:
-                            tree.insert('', 'end', values=(med['Название'], med['Кол-во'], med['Сколько дней']))
-                        found = True
-                        break
-            if not found:
-                # Вместо messagebox можно использовать простой вывод в консоль или в окно информации
-                print(f"Запись с ФИО '{search_name}' не найдена.")
-                table_window.destroy()
-        # Если файл data.yaml пуст
-        if not data:
-            # Вместо messagebox можно использовать простой вывод в консоль или в окно информации
-            print("Файл data.yaml пуст.")
-            table_window.destroy()
-        # Обработка ошибки чтения YAML файла
+        tree.heading('Дата', text='Дата')
+        tree.heading('Содержание', text='Содержание')
+
+        tree.column('Лекарство', width=150, anchor='center')
+        tree.column('Кол-во', width=100, anchor='center')
+        tree.column('Сколько дней', width=100, anchor='center')
+        tree.column('Дата', width=100, anchor='center')
+        tree.column('Содержание', width=200, anchor='center')
+        
+        
+        tree.pack(fill=tk.BOTH, expand=True)
+
+        style = ttk.Style()
+        style.configure("Treeview", rowheight=25)
+        style.configure("Treeview.Heading", wraplength=150)
+        
         try:
-            yaml.safe_load(file)
+            with open('data.yaml', 'r', encoding='utf-8') as file:
+                data = yaml.safe_load(file)
+                found = False
+                if data:
+                    for fio, info in data.items():
+                        if fio == search_name:
+                            for med in info.get('Лекарства', []):
+                                tree.insert('', 'end', values=(med['Название'], med['Кол-во'], med['Сколько дней'], '', ''))
+                            for report in info.get('Отчёты', []):
+                                tree.insert('', 'end', values=('', '', '', report['Дата'], report['Содержание']))
+                            found = True
+                            break
+                if not found:
+                    print(f"Запись с ФИО '{search_name}' не найдена.")
+                    messagebox.showinfo("Информация", f"Запись с ФИО '{search_name}' не найдена.")
+                    table_window.destroy()
+                if not data:
+                    print("Файл data.yaml пуст.")
+                    messagebox.showinfo("Информация", "Файл data.yaml пуст.")
+                    table_window.destroy()
         except yaml.YAMLError as exc:
-            # Вместо messagebox можно использовать простой вывод в консоль или в окно информации
             print(f"Ошибка чтения файла data.yaml:\n{exc}")
+            messagebox.showerror("Ошибка", f"Ошибка чтения файла data.yaml:\n{exc}")
             table_window.destroy()
 
     # Define labels and entry fields based on the image structure
