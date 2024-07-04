@@ -1,54 +1,127 @@
+from telegram.ext import CommandHandler, Application, ContextTypes, MessageHandler, filters
+from telegram import Bot
+import yaml
 import asyncio
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import Message, CallbackQuery
-from aiogram.dispatcher import FSMContext
-from aiogram.dispatcher.filters.state import State, StatesGroup
-from aiogram.contrib.middlewares.logging import LoggingMiddleware
-from aiogram.types import ReplyKeyboardRemove, ReplyKeyboardMarkup, KeyboardButton
+from datetime import datetime, timedelta
+import pytz
 
-# Замените 'YOUR_BOT_TOKEN' на токен вашего бота, который вы получили от @BotFather в Telegram
-BOT_TOKEN = 'YOUR_BOT_TOKEN'
 
-# Создаем экземпляр бота
-bot = Bot(token=BOT_TOKEN)
-# Создаем диспетчер для обработки обновлений
-dp = Dispatcher(bot)
-# Подключаем логгирование для отслеживания действий бота
-dp.middleware.setup(LoggingMiddleware())
+TIMEZONE = pytz.timezone('Europe/Moscow')
 
-# Команда /start
-@dp.message_handler(commands=['start'])
-async def cmd_start(message: types.Message):
-    # Отправляем сообщение с приветствием и кнопками
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    buttons = [KeyboardButton(text="/start"), KeyboardButton(text="/help")]
-    keyboard.add(*buttons)
-    await message.answer("Привет! Я бот для телеграма. Напиши мне что-нибудь!", reply_markup=keyboard)
 
-# Команда /help
-@dp.message_handler(commands=['help'])
-async def cmd_help(message: types.Message):
-    # Отправляем сообщение с информацией о командах
-    await message.answer("Это бот для телеграма. Вот что я могу:\n"
-                         "/start - начать диалог с ботом\n"
-                         "/help - получить помощь")
+async def send_msg(chat_id, message):
+    bot = Bot(token='7340463442:AAHTj9njBjsXHnLmL-Wbrek575z9e840Sxc')
+    await bot.send_message(chat_id=chat_id, text=message)
 
-# Обработка текстовых сообщений
-@dp.message_handler(content_types=types.ContentType.TEXT)
-async def handle_text(message: types.Message):
-    # Отвечаем пользователю на его сообщение
-    await message.answer(f"Ты написал: {message.text}")
 
-# Функция для запуска бота
-async def main():
+async def reminder(chat_id, message, per_day):
+    start_hour = 8
+    end_hour = 21
+    while True:
+        now = datetime.now(TIMEZONE)
+        today_start = now.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+        today_end = now.replace(hour=end_hour, minute=0, second=0, microsecond=0)
+        if now < today_start:
+            wait_time = (today_start - now).total_seconds()
+        elif now > today_end:
+            wait_time = ((today_start + timedelta(days=1)) - now).total_seconds()
+        else:
+            interval = (today_end - today_start).total_seconds() / per_day
+            next_reminder_time = today_start + timedelta(seconds=interval)
+            while next_reminder_time < now:
+                next_reminder_time += timedelta(seconds=interval)
+            wait_time = (next_reminder_time - now).total_seconds()
+        await asyncio.sleep(wait_time)
+        await send_msg(chat_id, f'Не забудьте принять {message}!')
+
+
+async def reminder_runner(chat_id, message, duration, per_day):
+    reminder_task = asyncio.create_task(reminder(chat_id, message, per_day))
+    await asyncio.sleep(duration)
+    reminder_task.cancel()
     try:
-        # Стартуем бота
-        await bot.start_polling(dp)
-    except KeyboardInterrupt:
-        # Останавливаем бота при нажатии Ctrl+C
-        await bot.close()
+        await reminder_task
+    except asyncio.CancelledError:
+        await send_msg(chat_id, f'{message} можно больше не принимать.')
+
+
+async def link_user(id, fio):
+    try:
+        with open('data.yaml', 'r+', encoding='utf-8') as file:
+            data = yaml.safe_load(file)
+            medlist = ''
+            for i in data[fio]["Лекарства"]:
+                medlist += f"\n{i['Название']}, {i['Кол-во']}, {i['Сколько дней']} суток"
+                msg = i['Название']
+                per_day = int(i['Кол-во'].split()[0])
+                dur = int(i['Сколько дней']) * 86400
+                asyncio.create_task(reminder_runner(id, msg, dur, per_day))
+            data[fio]['chat_id'] = id
+            file.seek(0)
+            yaml.dump(data, file, allow_unicode=True)
+            reply_string = (
+                f'Здравствуйте, {fio}. '
+                'Здесь вы будете получать напоминания о '
+                'приеме ваших лекарств. '
+                'Вам прописано:\n'
+                f'{medlist}\n'
+                '\nПожалуйста, отправляйте в чат отчет о своем '
+                'самочувствии каждый день!'
+            )
+            return reply_string
+    except yaml.YAMLError as exc:
+        return f"Ошибка! \n{exc}"
+
+
+async def start(update, _):
+    await update.message.reply_text(
+        'Добро пожаловать в программу для отслеживания приема лекарств. Пожалуйста, введите ваши ФИО'
+    )
+
+
+async def common(update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message.text
+    chat_id = context._chat_id
+    try:
+        with open('data.yaml', 'r+', encoding='utf-8') as file:
+            data = yaml.safe_load(file)
+            if msg in data:
+                msg = await link_user(chat_id, fio=msg)
+            else:
+                now = datetime.now(TIMEZONE)
+                today = now.strftime("%d.%m.%Y")
+                status = 'записан.'
+                found = False
+                for key, val in data.items():
+                    if 'chat_id' in val:
+                        if val['chat_id'] == chat_id:
+                            if 'Отчёты' not in data[key]:
+                                data[key]['Отчёты'] = []
+                            buff = data[key]['Отчёты']
+                            if len(buff) > 0:
+                                if buff[-1]['Дата'] != today:
+                                    buff.append({'Дата': today, 'Содержание': msg})
+                                else:
+                                    buff[-1] = {'Дата': today, 'Содержание': msg}
+                                    status = 'перезаписан. Предыдущий отчёт за сегодня удалён.'
+                            else:
+                                buff.append({'Дата': today, 'Содержание': msg})
+                            data[key]['Отчёты'] = buff
+                            file.seek(0)
+                            yaml.dump(data, file, allow_unicode=True)
+                            msg = f'Ваш отчет за {today} {status}'
+                            found = True
+                            break
+                if not found:
+                    msg = 'Вы не найдены в базе пациентов.'
+            await update.message.reply_text(msg)
+    except yaml.YAMLError as exc:
+        print(exc)
+        return f"Ошибка! \n{exc}"
+
 
 if __name__ == '__main__':
-    # Запускаем цикл событий asyncio для работы бота
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    app = Application.builder().token('7340463442:AAHTj9njBjsXHnLmL-Wbrek575z9e840Sxc').build()
+    app.add_handler(CommandHandler('start', start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, common))
+    app.run_polling()
