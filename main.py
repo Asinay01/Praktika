@@ -3,7 +3,7 @@ from tkinter import ttk
 from tkinter import messagebox
 import time
 import yaml
-
+import os
 
 def create_form():
     # Create the main window
@@ -28,27 +28,35 @@ def create_form():
             fio: {
                 'Дата записи': str(time.strftime("%d.%m.%Y", time.localtime(time.time()))),
                 'Заболевание': entry_orvi.get(),
-                'Лекарства': [{'Название': med[0].get(), 'Кол-во': med[1].get(), 'Сколько дней': med[2].get()} for med in medications]
+                'Лекарства': [{'Название': med[0].get(), 'Кол-во': med[1].get(), 'Сколько раз в день': med[2].get()} for med in medications],
+                'Отчёты': [{'Дата': str(time.strftime("%d.%m.%Y", time.localtime(time.time()))), 'Состояние здоровья': ''}]
             }
         }
         clean_lines()
-        with open('data.yaml', 'r+', encoding='utf-8') as file:
-            try:
-                existing_data = yaml.safe_load(file)
-                if existing_data and fio in existing_data:
-                    # Полностью заменяем данные о лекарствах
-                    existing_data[fio]['Заболевание'] = data[fio]['Заболевание']
-                    existing_data[fio]['Лекарства'] = data[fio]['Лекарства']
-                    file.seek(0)
-                    yaml.dump(existing_data, file, allow_unicode=True)
-                else:
-                    file.seek(0, 2)
-                    yaml.dump(data, file, allow_unicode=True)
-                    file.write('\n')
-                medication_row[0] += 2
-                print(f"Данные для ФИО '{fio}' успешно сохранены в файле data.yaml.")
-            except yaml.YAMLError as exc:
-                tk.messagebox.showerror("Ошибка", f"Ошибка записи данных в файл data.yaml:\n{exc}")
+        try:
+            if os.path.exists('data.yaml'):
+                with open('data.yaml', 'r', encoding='utf-8') as file:
+                    try:
+                        existing_data = yaml.safe_load(file) or {}
+                    except yaml.YAMLError:
+                        existing_data = {}
+            else:
+                existing_data = {}
+
+            if fio in existing_data:
+                existing_data[fio]['Заболевание'] = data[fio]['Заболевание']
+                existing_data[fio]['Лекарства'] = data[fio]['Лекарства']
+                existing_data[fio]['Отчёты'].append(data[fio]['Отчёты'][0])
+            else:
+                existing_data.update(data)
+
+            with open('data.yaml', 'w', encoding='utf-8') as file:
+                yaml.dump(existing_data, file, allow_unicode=True)
+
+            medication_row[0] += 2
+            print(f"Данные для ФИО '{fio}' успешно сохранены в файле data.yaml.")
+        except Exception as exc:
+            tk.messagebox.showerror("Ошибка", f"Ошибка записи данных в файл data.yaml:\n{exc}")
 
     def add_medication():
         if len(medications) >= 10:
@@ -65,7 +73,7 @@ def create_form():
             "1 раз в день", "2 раза в день", "3 раза в день", "4 раза в день"
         ])
         medication_time_dose_combobox.grid(row=0, column=3, padx=5, pady=5)
-        lbl_medication_course = ttk.Label(frame, text="Сколько дней")
+        lbl_medication_course = ttk.Label(frame, text="Сколько раз в день")
         lbl_medication_course.grid(row=0, column=4, padx=5, pady=5)
         medication_course_combobox = ttk.Combobox(frame, values=["3", "7", "14"])
         medication_course_combobox.grid(row=0, column=5, padx=5, pady=5)
@@ -81,50 +89,53 @@ def create_form():
         table_window = tk.Toplevel(root)
         table_window.title(f"Таблица для записи с ФИО '{search_name}'")
         table_window.minsize(800, 400)
-        tree = ttk.Treeview(table_window, columns=('Лекарство', 'Кол-во', "Сколько дней", "Дата", "Содержание"), show='headings')
-        
-        table_window.minsize(1900, 400)
+        tree = ttk.Treeview(table_window, columns=('Лекарство', 'Кол-во', "Сколько раз в день", "Дата", "Состояние здоровья"), show='headings')
+
+        table_window.minsize(800, 400)
 
         tree.heading('Лекарство', text='Лекарство')
         tree.heading('Кол-во', text='Кол-во')
-        tree.heading('Сколько дней', text='Сколько дней')
+        tree.heading('Сколько раз в день', text='Сколько раз в день')
         tree.heading('Дата', text='Дата')
-        tree.heading('Содержание', text='Содержание')
+        tree.heading('Состояние здоровья', text='Состояние здоровья')
 
         tree.column('Лекарство', width=150, anchor='center')
         tree.column('Кол-во', width=100, anchor='center')
-        tree.column('Сколько дней', width=100, anchor='center')
+        tree.column('Сколько раз в день', width=100, anchor='center')
         tree.column('Дата', width=100, anchor='center')
-        tree.column('Содержание', width=200, anchor='center')
-        
-        
+        tree.column('Состояние здоровья', width=200, anchor='center')
+
         tree.pack(fill=tk.BOTH, expand=True)
 
         style = ttk.Style()
         style.configure("Treeview", rowheight=25)
         style.configure("Treeview.Heading", wraplength=150)
-        
+
         try:
-            with open('data.yaml', 'r', encoding='utf-8') as file:
-                data = yaml.safe_load(file)
-                found = False
-                if data:
-                    for fio, info in data.items():
-                        if fio == search_name:
-                            for med in info.get('Лекарства', []):
-                                tree.insert('', 'end', values=(med['Название'], med['Кол-во'], med['Сколько дней'], '', ''))
-                            for report in info.get('Отчёты', []):
-                                tree.insert('', 'end', values=('', '', '', report['Дата'], report['Содержание']))
-                            found = True
-                            break
-                if not found:
-                    print(f"Запись с ФИО '{search_name}' не найдена.")
-                    messagebox.showinfo("Информация", f"Запись с ФИО '{search_name}' не найдена.")
-                    table_window.destroy()
-                if not data:
-                    print("Файл data.yaml пуст.")
-                    messagebox.showinfo("Информация", "Файл data.yaml пуст.")
-                    table_window.destroy()
+            if os.path.exists('data.yaml'):
+                with open('data.yaml', 'r', encoding='utf-8') as file:
+                    data = yaml.safe_load(file)
+            else:
+                data = None
+
+            found = False
+            if data:
+                for fio, info in data.items():
+                    if fio == search_name:
+                        for med in info.get('Лекарства', []):
+                            tree.insert('', 'end', values=(med['Название'], med['Кол-во'], med['Сколько раз в день'], '', ''))
+                        for report in info.get('Отчёты', []):
+                            tree.insert('', 'end', values=('', '', '', report['Дата'], report['Состояние здоровья']))
+                        found = True
+                        break
+            if not found:
+                print(f"Запись с ФИО '{search_name}' не найдена.")
+                messagebox.showinfo("Информация", f"Запись с ФИО '{search_name}' не найдена.")
+                table_window.destroy()
+            if not data:
+                print("Файл data.yaml пуст.")
+                messagebox.showinfo("Информация", "Файл data.yaml пуст.")
+                table_window.destroy()
         except yaml.YAMLError as exc:
             print(f"Ошибка чтения файла data.yaml:\n{exc}")
             messagebox.showerror("Ошибка", f"Ошибка чтения файла data.yaml:\n{exc}")
@@ -155,7 +166,6 @@ def create_form():
 
     # Run the application
     root.mainloop()
-
 
 # Call the function to create the form
 create_form()
