@@ -5,6 +5,7 @@ import time
 import yaml
 import os
 
+
 def create_form():
     # Create the main window
     root = tk.Tk()
@@ -28,7 +29,7 @@ def create_form():
             fio: {
                 'Дата записи': str(time.strftime("%d.%m.%Y", time.localtime(time.time()))),
                 'Заболевание': entry_orvi.get(),
-                'Лекарства': [{'Название': med[0].get(), 'Кол-во': med[1].get(), 'Сколько раз в день': med[2].get()} for med in medications],
+                'Лекарства': [{'Название': med[0].get(), 'Кол-во': med[1].get(), 'Как долго принимать': med[2].get()} for med in medications],
                 'Отчёты': [{'Дата': str(time.strftime("%d.%m.%Y", time.localtime(time.time()))), 'Состояние здоровья': ''}]
             }
         }
@@ -73,9 +74,9 @@ def create_form():
             "1 раз в день", "2 раза в день", "3 раза в день", "4 раза в день"
         ])
         medication_time_dose_combobox.grid(row=0, column=3, padx=5, pady=5)
-        lbl_medication_course = ttk.Label(frame, text="Сколько раз в день")
+        lbl_medication_course = ttk.Label(frame, text="Как долго принимать")
         lbl_medication_course.grid(row=0, column=4, padx=5, pady=5)
-        medication_course_combobox = ttk.Combobox(frame, values=["3", "7", "14"])
+        medication_course_combobox = ttk.Combobox(frame, values=["3 дня", "7 дней", "14 дней"])
         medication_course_combobox.grid(row=0, column=5, padx=5, pady=5)
         medications.append((entry_medication_text, medication_time_dose_combobox, medication_course_combobox))
         medication_row[0] += 1
@@ -83,25 +84,24 @@ def create_form():
         save_button.grid(row=medication_row[0] + 2, column=0, columnspan=4, pady=10)
         show_table_button.grid(row=medication_row[0] + 3, column=0, columnspan=4, pady=10)
 
-
     def show_table():
         search_name = entry_name.get()
         table_window = tk.Toplevel(root)
         table_window.title(f"Таблица для записи с ФИО '{search_name}'")
         table_window.minsize(800, 400)
-        tree = ttk.Treeview(table_window, columns=('Лекарство', 'Кол-во', "Сколько раз в день", "Дата", "Состояние здоровья"), show='headings')
+        tree = ttk.Treeview(table_window, columns=('Лекарство', 'Кол-во', "Как долго принимать", "Дата", "Состояние здоровья"), show='headings')
 
         table_window.minsize(800, 400)
 
         tree.heading('Лекарство', text='Лекарство')
         tree.heading('Кол-во', text='Кол-во')
-        tree.heading('Сколько раз в день', text='Сколько раз в день')
+        tree.heading('Как долго принимать', text='Как долго принимать')
         tree.heading('Дата', text='Дата')
         tree.heading('Состояние здоровья', text='Состояние здоровья')
 
         tree.column('Лекарство', width=150, anchor='center')
         tree.column('Кол-во', width=100, anchor='center')
-        tree.column('Сколько раз в день', width=100, anchor='center')
+        tree.column('Как долго принимать', width=100, anchor='center')
         tree.column('Дата', width=100, anchor='center')
         tree.column('Состояние здоровья', width=200, anchor='center')
 
@@ -123,7 +123,7 @@ def create_form():
                 for fio, info in data.items():
                     if fio == search_name:
                         for med in info.get('Лекарства', []):
-                            tree.insert('', 'end', values=(med['Название'], med['Кол-во'], med['Сколько раз в день'], '', ''))
+                            tree.insert('', 'end', values=(med['Название'], med['Кол-во'], med['Как долго принимать'], '', ''))
                         for report in info.get('Отчёты', []):
                             tree.insert('', 'end', values=('', '', '', report['Дата'], report['Состояние здоровья']))
                         found = True
@@ -141,9 +141,7 @@ def create_form():
             messagebox.showerror("Ошибка", f"Ошибка чтения файла data.yaml:\n{exc}")
             table_window.destroy()
 
-    # Define labels and entry fields based on the image structure
-    medication_row = [5]  # track the current row for medication inputs
-    # Row 1: ФИО, ОРВИ
+    medication_row = [5]
     lbl_name = ttk.Label(root, text="ФИО")
     lbl_name.grid(row=0, column=0, padx=5, pady=5)
     entry_name = ttk.Entry(root)
@@ -153,19 +151,16 @@ def create_form():
     entry_orvi = ttk.Entry(root)
     entry_orvi.grid(row=1, column=1, padx=5, pady=5)
 
-    # Add medication button
     add_medication_button = ttk.Button(root, text="Добавить лекарство", command=add_medication)
     add_medication_button.grid(row=medication_row[0]+1, column=0, columnspan=4, pady=10)
 
-    # Save button
     save_button = ttk.Button(root, text="Сохранить", command=save_to_yaml)
     save_button.grid(row=medication_row[0] + 2, column=0, columnspan=4, pady=10)
 
     show_table_button = ttk.Button(root, text="Показать таблицу по ФИО", command=show_table)
     show_table_button.grid(row=medication_row[0] + 3, column=0, columnspan=4, pady=10)
 
-    # Run the application
     root.mainloop()
 
-# Call the function to create the form
+
 create_form()
