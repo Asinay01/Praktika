@@ -7,7 +7,7 @@ import pytz
 
 
 TIMEZONE = pytz.timezone('Europe/Moscow')
-TOKEN = 'urtoken'
+TOKEN = ''
 
 async def send_msg(chat_id, message):
     bot = Bot(token=TOKEN)
@@ -51,10 +51,10 @@ async def link_user(id, fio):
             data = yaml.safe_load(file)
             medlist = ''
             for i in data[fio]["Лекарства"]:
-                medlist += f"\n{i['Название']}, {i['Кол-во']}, {i['Сколько дней']} суток"
+                medlist += f"\n{i['Название']}, {i['Кол-во']}, {i['Как долго принимать']}"
                 msg = i['Название']
                 per_day = int(i['Кол-во'].split()[0])
-                dur = int(i['Сколько дней']) * 86400
+                dur = int(i['Как долго принимать'].split()[0]) * 86400
                 asyncio.create_task(reminder_runner(id, msg, dur, per_day))
             data[fio]['chat_id'] = id
             file.seek(0)
@@ -90,26 +90,19 @@ async def common(update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 now = datetime.now(TIMEZONE)
                 today = now.strftime("%d.%m.%Y")
-                status = 'записан.'
                 found = False
                 for key, val in data.items():
                     if 'chat_id' in val:
                         if val['chat_id'] == chat_id:
-                            if 'Отчёты' not in data[key]:
-                                data[key]['Отчёты'] = []
                             buff = data[key]['Отчёты']
-                            if len(buff) > 0:
-                                if buff[-1]['Дата'] != today:
-                                    buff.append({'Дата': today, 'Содержание': msg})
-                                else:
-                                    buff[-1] = {'Дата': today, 'Содержание': msg}
-                                    status = 'перезаписан. Предыдущий отчёт за сегодня удалён.'
+                            if buff[-1]['Дата'] != today:
+                                buff.append({'Дата': today, 'Состояние здоровья': msg})
                             else:
-                                buff.append({'Дата': today, 'Содержание': msg})
+                                buff[-1] = {'Дата': today, 'Состояние здоровья': msg}
                             data[key]['Отчёты'] = buff
                             file.seek(0)
                             yaml.dump(data, file, allow_unicode=True)
-                            msg = f'Ваш отчет за {today} {status}'
+                            msg = f'Ваш отчет за {today} записан.'
                             found = True
                             break
                 if not found:
